@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Single Line Checker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #0078d4;
+            text-align: center;
+        }
+        #folderInput {
+            margin-bottom: 10px;
+        }
+        #showInvalidButton {
+            margin-left: 10px;
+        }
+        #validFilesContainer, #invalidFilesContainer {
+            margin-top: 20px;
+        }
+        .file-container {
+            background-color: #252526;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        .file-container h2, .file-container h3 {
+            margin-top: 0;
+            color: #0078d4;
+        }
+        canvas {
+            background-color: #1e1e1e;
+            border: 1px solid #0078d4;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #0078d4;
+            color: #ffffff;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #005a9e;
+        }
+        .reason {
+            color: #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <h1>Single Line Checker</h1>
+    <input type="file" id="folderInput" webkitdirectory directory multiple>
+    <div id="validFilesContainer"></div>
+    <div id="invalidFilesContainer"></div>
+    <script>
+        document.getElementById('folderInput').addEventListener('change', function(event) {
+            const files = event.target.files;
+            const invalidFiles = [];
+            const validFiles = [];
+
+            const filePromises = [];
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                // Only process JSON files
+                if (file.type === 'application/json' || file.name.endsWith('.json')) {
+                    filePromises.push(new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            try {
+                                const json = JSON.parse(e.target.result);
+                                // Check the JSON
+                                const result = checkGraph(json);
+                                if (result.valid) {
+                                    validFiles.push({name: file.name, content: json});
+                                } else {
+                                    invalidFiles.push({name: file.name, content: json, reason: result.reason});
+                                }
+                                resolve();
+                            } catch (err) {
+                                console.error('Error parsing JSON in file ' + file.name);
+                                invalidFiles.push({name: file.name, content: null, reason: 'Error parsing JSON'});
+                                resolve();
+                            }
+                        };
+                        reader.onerror = function() {
+                            console.error('Error reading file ' + file.name);
+                            invalidFiles.push({name: file.name, content: null, reason: 'Error reading file'});
+                            resolve();
+                        };
+                        reader.readAsText(file);
+                    }));
+                }
+            }
+
+            Promise.all(filePromises).then(() => {
+                // All files processed
+                // Display valid and invalid files
+                displayValidFiles(validFiles);
+                displayInvalidFiles(invalidFiles);
+            });
+        });
+
+        function checkGraph(data) {
+            const dots = data.dots;
+            const edges = data.edges;
+
+            // Check condition 2 first: no two nodes have more than one edge between them
+            const edgeSet = new Set();
+            for (let edge of edges) {
+                const start = Math.min(edge.startIndex, edge.endIndex);
+                const end = Math.max(edge.startIndex, edge.endIndex);
+                const edgeKey = start + '-' + end;
+                if (edgeSet.has(edgeKey)) {
+                    // There is more than one edge between two nodes
+                    return { valid: false, reason: '2 điểm không được có hơn 1 cạnh' };
+                }
+                edgeSet.add(edgeKey);
+            }
+
+            // Check condition 1: For each node, check if there are two edges connected to it with length <50 and angle <90 degrees
+            // Build adjacency list
+            const adjList = {};
+            for (let i = 0; i < dots.length; i++) {
+                adjList[i] = [];
+            }
+            for (let edge of edges) {
+                adjList[edge.startIndex].push(edge.endIndex);
+                adjList[edge.endIndex].push(edge.startIndex);
+            }
+
+            // For each node, check connected edges
+            for (let i = 0; i < dots.length; i++) {
+                const connectedNodes = adjList[i];
+                if (connectedNodes.length < 2) continue;
+
+                for (let j = 0; j < connectedNodes.length; j++) {
+                    for (let k = j + 1; k < connectedNodes.length; k++) {
+                        const nodeA = i;
+                        const nodeB = connectedNodes[j];
+                        const nodeC = connectedNodes[k];
+
+                        const dotA = dots[nodeA];
+                        const dotB = dots[nodeB];
+                        const dotC = dots[nodeC];
+
+                        const lengthAB = distance(dotA, dotB);
+                        const lengthAC = distance(dotA, dotC);
+
+                        if (lengthAB < 50 && lengthAC < 50) {
+                            // Calculate angle between vectors AB and AC
+                            const angle = calculateAngle(dotA, dotB, dotC);
+                            if (angle < 90) {
+                                return { valid: false, reason: 'Hai cạnh kết nối với một điểm có độ dài nhỏ hơn 50 và góc giữa chúng nhỏ hơn 90 độ.' };
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If all checks passed, the graph is valid
+            return { valid: true };
+        }
+
+        function distance(a, b) {
+            const dx = a.x - b.x;
+            const dy = a.y - b.y;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function calculateAngle(a, b, c) {
+            // Returns angle at point a between vectors ab and ac in degrees
+            const ab = {x: b.x - a.x, y: b.y - a.y};
+            const ac = {x: c.x - a.x, y: c.y - a.y};
+            const dotProduct = ab.x * ac.x + ab.y * ac.y;
+            const magnitudeAB = Math.sqrt(ab.x * ab.x + ab.y * ab.y);
+            const magnitudeAC = Math.sqrt(ac.x * ac.x + ac.y * ac.y);
+            const cosTheta = dotProduct / (magnitudeAB * magnitudeAC);
+            // Protect against numerical errors
+            const theta = Math.acos(Math.max(-1, Math.min(1, cosTheta)));
+            return theta * (180 / Math.PI);
+        }
+
+        function displayValidFiles(validFiles) {
+            const container = document.getElementById('validFilesContainer');
+            container.innerHTML = ''; // Clear previous content
+
+            if (validFiles.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+
+            container.style.display = 'block';
+
+            const title = document.createElement('h2');
+            title.textContent = 'Valid Files';
+            container.appendChild(title);
+
+            validFiles.forEach((fileData) => {
+                const fileDiv = document.createElement('div');
+                fileDiv.classList.add('file-container');
+
+                const title = document.createElement('h3');
+                title.textContent = fileData.name;
+                fileDiv.appendChild(title);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 400;
+                canvas.height = 400;
+                fileDiv.appendChild(canvas);
+
+                const ctx = canvas.getContext('2d');
+
+                // Draw the graph
+                drawGraph(ctx, fileData.content);
+
+                // Find Eulerian path
+                const eulerPath = findEulerianPath(fileData.content.dots, fileData.content.edges);
+
+                if (eulerPath === null) {
+                    // No Eulerian path found
+                    const message = document.createElement('p');
+                    message.textContent = 'No Eulerian path found in this graph.';
+                    fileDiv.appendChild(message);
+                } else {
+                    // Provide export button
+                    const exportButton = document.createElement('button');
+                    exportButton.textContent = 'Export';
+                    exportButton.addEventListener('click', function() {
+                        // Add 'guide' to JSON and download
+                        const newData = JSON.parse(JSON.stringify(fileData.content)); // Deep copy
+                        newData.guide = eulerPath;
+                        const jsonString = JSON.stringify(newData, null, 2);
+                        const blob = new Blob([jsonString], { type: "application/json" });
+                        const link = document.createElement("a");
+                        link.href = URL.createObjectURL(blob);
+                        link.download = fileData.name;
+                        link.click();
+                    });
+                    fileDiv.appendChild(exportButton);
+                }
+
+                container.appendChild(fileDiv);
+            });
+        }
+
+        function displayInvalidFiles(invalidFiles) {
+            const container = document.getElementById('invalidFilesContainer');
+            container.innerHTML = ''; // Clear previous content
+
+            if (invalidFiles.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+
+            container.style.display = 'block';
+
+            const title = document.createElement('h2');
+            title.textContent = 'Invalid Files';
+            container.appendChild(title);
+
+            invalidFiles.forEach((fileData) => {
+                const fileDiv = document.createElement('div');
+                fileDiv.classList.add('file-container');
+
+                const title = document.createElement('h3');
+                title.textContent = fileData.name;
+                fileDiv.appendChild(title);
+
+                const reason = document.createElement('p');
+                reason.textContent = 'Reason: ' + fileData.reason;
+                reason.classList.add('reason');
+                fileDiv.appendChild(reason);
+
+                if (fileData.content) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 400;
+                    canvas.height = 400;
+                    fileDiv.appendChild(canvas);
+
+                    const ctx = canvas.getContext('2d');
+
+                    // Draw the graph
+                    drawGraph(ctx, fileData.content);
+                }
+
+                container.appendChild(fileDiv);
+            });
+        }
+
+        function drawGraph(ctx, data) {
+            const dots = data.dots;
+            const edges = data.edges;
+
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+            // Draw edges
+            ctx.strokeStyle = '#0078d4';
+            ctx.lineWidth = 2;
+
+            edges.forEach(edge => {
+                const startDot = dots[edge.startIndex];
+                const endDot = dots[edge.endIndex];
+
+                ctx.beginPath();
+                ctx.moveTo(startDot.x, startDot.y);
+
+                if (edge.controlPoint) {
+                    ctx.quadraticCurveTo(edge.controlPoint.x, edge.controlPoint.y, endDot.x, endDot.y);
+                } else {
+                    ctx.lineTo(endDot.x, endDot.y);
+                }
+
+                ctx.stroke();
+            });
+
+            // Draw dots
+            ctx.fillStyle = '#fff';
+            ctx.strokeStyle = '#0078d4';
+            ctx.lineWidth = 2;
+
+            dots.forEach((dot, index) => {
+                ctx.beginPath();
+                ctx.arc(dot.x, dot.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#fff';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(index.toString(), dot.x, dot.y + 15);
+            });
+        }
+
+        function findEulerianPath(dots, edges) {
+            const adj = {};
+            const degree = {};
+
+            // Initialize adjacency list and degree count
+            for(let i=0; i<dots.length; i++) {
+                adj[i] = [];
+                degree[i] = 0;
+            }
+
+            // Populate adjacency list and degree
+            edges.forEach((edge, index) => {
+                adj[edge.startIndex].push({node: edge.endIndex, edgeId: index});
+                adj[edge.endIndex].push({node: edge.startIndex, edgeId: index});
+                degree[edge.startIndex]++;
+                degree[edge.endIndex]++;
+            });
+
+            // Find nodes with odd degree
+            const oddNodes = [];
+            for(let i=0; i<dots.length; i++) {
+                if(degree[i] % 2 !== 0) {
+                    oddNodes.push(i);
+                }
+            }
+
+            // Check for Eulerian Path conditions
+            if(oddNodes.length !== 0 && oddNodes.length !== 2) {
+                return null;
+            }
+
+            // Start node
+            let startNode = 0;
+            if(oddNodes.length === 2) {
+                startNode = oddNodes[0];
+            }
+
+            const path = [];
+            const stack = [startNode];
+            const usedEdges = new Set();
+
+            while(stack.length > 0) {
+                const current = stack[stack.length -1];
+                if(adj[current].length === 0) {
+                    path.push(stack.pop());
+                } else {
+                    const next = adj[current].pop();
+                    if(!usedEdges.has(next.edgeId)) {
+                        usedEdges.add(next.edgeId);
+                        stack.push(next.node);
+                    }
+                }
+            }
+
+            // Check if all edges are used
+            if(usedEdges.size !== edges.length) {
+                return null;
+            }
+
+            return path.reverse();
+        }
+    </script>
+</body>
+</html>
