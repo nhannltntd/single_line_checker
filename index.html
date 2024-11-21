@@ -154,7 +154,7 @@
                         const lengthAB = distance(dotA, dotB);
                         const lengthAC = distance(dotA, dotC);
 
-                        if (lengthAB < 50 && lengthAC < 50) {
+                        if (lengthAB < 50 || lengthAC < 50) {
                             // Calculate angle between vectors AB and AC
                             const angle = calculateAngle(dotA, dotB, dotC);
                             if (angle < 90) {
