@@ -157,8 +157,8 @@
                         if (lengthAB < 50 || lengthAC < 50) {
                             // Calculate angle between vectors AB and AC
                             const angle = calculateAngle(dotA, dotB, dotC);
-                            if (angle < 90) {
-                                return { valid: false, reason: 'Hai cạnh kết nối với một điểm có độ dài nhỏ hơn 50 và góc giữa chúng nhỏ hơn 90 độ.' };
+                            if (angle < 85) {
+                                return { valid: false, reason: 'Hai cạnh kết nối với một điểm có độ dài nhỏ hơn 50 và góc giữa chúng nhỏ hơn 85 độ.' };
                             }
                         }
                     }
