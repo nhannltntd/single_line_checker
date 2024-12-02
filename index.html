@@ -17,9 +17,6 @@
         #folderInput {
             margin-bottom: 10px;
         }
-        #showInvalidButton {
-            margin-left: 10px;
-        }
         #validFilesContainer, #invalidFilesContainer {
             margin-top: 20px;
         }
@@ -52,6 +49,10 @@
         .reason {
             color: #ff6b6b;
         }
+        .success-message {
+            color: #4CAF50; /* Green color */
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -79,7 +80,12 @@
                                 // Check the JSON
                                 const result = checkGraph(json);
                                 if (result.valid) {
-                                    validFiles.push({name: file.name, content: json});
+                                    // Check if the JSON contains "guide" property
+                                    if (!json.hasOwnProperty('guide')) {
+                                        invalidFiles.push({name: file.name, content: json, reason: 'Missing "guide" property'});
+                                    } else {
+                                        validFiles.push({name: file.name, content: json});
+                                    }
                                 } else {
                                     invalidFiles.push({name: file.name, content: json, reason: result.reason});
                                 }
@@ -176,14 +182,12 @@
         }
 
         function calculateAngle(a, b, c) {
-            // Returns angle at point a between vectors ab and ac in degrees
             const ab = {x: b.x - a.x, y: b.y - a.y};
             const ac = {x: c.x - a.x, y: c.y - a.y};
             const dotProduct = ab.x * ac.x + ab.y * ac.y;
             const magnitudeAB = Math.sqrt(ab.x * ab.x + ab.y * ab.y);
             const magnitudeAC = Math.sqrt(ac.x * ac.x + ac.y * ac.y);
             const cosTheta = dotProduct / (magnitudeAB * magnitudeAC);
-            // Protect against numerical errors
             const theta = Math.acos(Math.max(-1, Math.min(1, cosTheta)));
             return theta * (180 / Math.PI);
         }
@@ -221,30 +225,19 @@
                 // Draw the graph
                 drawGraph(ctx, fileData.content);
 
-                // Find Eulerian path
+                // Eulerian check
                 const eulerPath = findEulerianPath(fileData.content.dots, fileData.content.edges);
 
                 if (eulerPath === null) {
-                    // No Eulerian path found
                     const message = document.createElement('p');
                     message.textContent = 'No Eulerian path found in this graph.';
                     fileDiv.appendChild(message);
                 } else {
-                    // Provide export button
-                    const exportButton = document.createElement('button');
-                    exportButton.textContent = 'Export';
-                    exportButton.addEventListener('click', function() {
-                        // Add 'guide' to JSON and download
-                        const newData = JSON.parse(JSON.stringify(fileData.content)); // Deep copy
-                        newData.guide = eulerPath;
-                        const jsonString = JSON.stringify(newData, null, 2);
-                        const blob = new Blob([jsonString], { type: "application/json" });
-                        const link = document.createElement("a");
-                        link.href = URL.createObjectURL(blob);
-                        link.download = fileData.name;
-                        link.click();
-                    });
-                    fileDiv.appendChild(exportButton);
+                    // Success message
+                    const successMessage = document.createElement('p');
+                    successMessage.textContent = 'Chúc mừng! Không có bất kỳ lỗi nào';
+                    successMessage.classList.add('success-message');
+                    fileDiv.appendChild(successMessage);
                 }
 
                 container.appendChild(fileDiv);
@@ -289,6 +282,29 @@
 
                     // Draw the graph
                     drawGraph(ctx, fileData.content);
+                }
+
+                // Add export button if "guide" is missing
+                if (fileData.reason === 'Missing "guide" property') {
+                    const exportButton = document.createElement('button');
+                    exportButton.textContent = 'Export';
+                    exportButton.addEventListener('click', function() {
+                        const eulerPath = findEulerianPath(fileData.content.dots, fileData.content.edges);
+                        if (eulerPath === null) {
+                            alert('No Eulerian path found in this graph.');
+                        } else {
+                            // Add "guide" and export the updated JSON
+                            const newData = JSON.parse(JSON.stringify(fileData.content));
+                            newData.guide = eulerPath;
+                            const jsonString = JSON.stringify(newData, null, 2);
+                            const blob = new Blob([jsonString], { type: "application/json" });
+                            const link = document.createElement("a");
+                            link.href = URL.createObjectURL(blob);
+                            link.download = fileData.name;
+                            link.click();
+                        }
+                    });
+                    fileDiv.appendChild(exportButton);
                 }
 
                 container.appendChild(fileDiv);
@@ -345,35 +361,35 @@
             const degree = {};
 
             // Initialize adjacency list and degree count
-            for(let i=0; i<dots.length; i++) {
+            for (let i = 0; i < dots.length; i++) {
                 adj[i] = [];
                 degree[i] = 0;
             }
 
             // Populate adjacency list and degree
             edges.forEach((edge, index) => {
-                adj[edge.startIndex].push({node: edge.endIndex, edgeId: index});
-                adj[edge.endIndex].push({node: edge.startIndex, edgeId: index});
+                adj[edge.startIndex].push({ node: edge.endIndex, edgeId: index });
+                adj[edge.endIndex].push({ node: edge.startIndex, edgeId: index });
                 degree[edge.startIndex]++;
                 degree[edge.endIndex]++;
             });
 
             // Find nodes with odd degree
             const oddNodes = [];
-            for(let i=0; i<dots.length; i++) {
-                if(degree[i] % 2 !== 0) {
+            for (let i = 0; i < dots.length; i++) {
+                if (degree[i] % 2 !== 0) {
                     oddNodes.push(i);
                 }
             }
 
             // Check for Eulerian Path conditions
-            if(oddNodes.length !== 0 && oddNodes.length !== 2) {
+            if (oddNodes.length !== 0 && oddNodes.length !== 2) {
                 return null;
             }
 
             // Start node
             let startNode = 0;
-            if(oddNodes.length === 2) {
+            if (oddNodes.length === 2) {
                 startNode = oddNodes[0];
             }
 
@@ -381,13 +397,13 @@
             const stack = [startNode];
             const usedEdges = new Set();
 
-            while(stack.length > 0) {
-                const current = stack[stack.length -1];
-                if(adj[current].length === 0) {
+            while (stack.length > 0) {
+                const current = stack[stack.length - 1];
+                if (adj[current].length === 0) {
                     path.push(stack.pop());
                 } else {
                     const next = adj[current].pop();
-                    if(!usedEdges.has(next.edgeId)) {
+                    if (!usedEdges.has(next.edgeId)) {
                         usedEdges.add(next.edgeId);
                         stack.push(next.node);
                     }
@@ -395,7 +411,7 @@
             }
 
             // Check if all edges are used
-            if(usedEdges.size !== edges.length) {
+            if (usedEdges.size !== edges.length) {
                 return null;
             }
 
