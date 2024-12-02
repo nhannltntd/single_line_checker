@@ -1,47 +1,69 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Single Line Checker</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #1e1e1e;
-            color: #ffffff;
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
             margin: 0;
             padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         h1 {
             color: #0078d4;
-            text-align: center;
+            margin-bottom: 20px;
         }
         #folderInput {
-            margin-bottom: 10px;
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
         }
-        #validFilesContainer, #invalidFilesContainer {
-            margin-top: 20px;
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
         }
         .file-container {
-            background-color: #252526;
-            padding: 10px;
-            margin-bottom: 20px;
+            background-color: #fff;
             border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+        .file-container:hover {
+            transform: translateY(-5px);
         }
         .file-container h2, .file-container h3 {
-            margin-top: 0;
-            color: #0078d4;
+            margin: 0;
+            padding: 15px;
+            background-color: #0078d4;
+            color: #fff;
         }
         canvas {
-            background-color: #1e1e1e;
-            border: 1px solid #0078d4;
-            margin-bottom: 10px;
+            width: 100%;
+            height: auto;
+            border-bottom: 1px solid #ddd;
+        }
+        .content {
+            padding: 15px;
         }
         button {
             background-color: #0078d4;
-            color: #ffffff;
+            color: #fff;
             border: none;
-            padding: 8px 12px;
+            padding: 10px 15px;
             border-radius: 4px;
             cursor: pointer;
+            transition: background-color 0.2s;
         }
         button:hover {
             background-color: #005a9e;
@@ -50,7 +72,7 @@
             color: #ff6b6b;
         }
         .success-message {
-            color: #4CAF50; /* Green color */
+            color: #4CAF50;
             font-weight: bold;
         }
     </style>
@@ -58,47 +80,116 @@
 <body>
     <h1>Single Line Checker</h1>
     <input type="file" id="folderInput" webkitdirectory directory multiple>
-    <div id="validFilesContainer"></div>
-    <div id="invalidFilesContainer"></div>
+    <div class="container" id="filesContainer"></div>
     <script>
         document.getElementById('folderInput').addEventListener('change', function(event) {
             const files = event.target.files;
-            const invalidFiles = [];
-            const validFiles = [];
+            const filesContainer = document.getElementById('filesContainer');
+            filesContainer.innerHTML = '';
 
             const filePromises = [];
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
-                // Only process JSON files
                 if (file.type === 'application/json' || file.name.endsWith('.json')) {
                     filePromises.push(new Promise((resolve, reject) => {
                         const reader = new FileReader();
                         reader.onload = function(e) {
                             try {
                                 const json = JSON.parse(e.target.result);
-                                // Check the JSON
                                 const result = checkGraph(json);
+                                const fileDiv = document.createElement('div');
+                                fileDiv.classList.add('file-container');
+
+                                const title = document.createElement('h3');
+                                title.textContent = file.name;
+                                fileDiv.appendChild(title);
+
+                                const canvas = document.createElement('canvas');
+                                canvas.width = 400;
+                                canvas.height = 400;
+                                fileDiv.appendChild(canvas);
+
+                                const ctx = canvas.getContext('2d');
+                                drawGraph(ctx, json);
+
+                                const contentDiv = document.createElement('div');
+                                contentDiv.classList.add('content');
+
                                 if (result.valid) {
-                                    // Check if the JSON contains "guide" property
                                     if (!json.hasOwnProperty('guide')) {
-                                        invalidFiles.push({name: file.name, content: json, reason: 'Missing "guide" property'});
+                                        const reason = document.createElement('p');
+                                        reason.textContent = 'Reason: ❌Thiếu "guide" rồi EXPORT LẠI NHA';
+                                        reason.classList.add('reason');
+                                        contentDiv.appendChild(reason);
+
+                                        const exportButton = document.createElement('button');
+                                        exportButton.textContent = 'Export';
+                                        exportButton.addEventListener('click', function() {
+                                            const eulerPath = findEulerianPath(json.dots, json.edges);
+                                            if (eulerPath === null) {
+                                                alert('No Eulerian path found in this graph.');
+                                            } else {
+                                                const newData = JSON.parse(JSON.stringify(json));
+                                                newData.guide = eulerPath;
+                                                const jsonString = JSON.stringify(newData, null, 2);
+                                                const blob = new Blob([jsonString], { type: "application/json" });
+                                                const link = document.createElement("a");
+                                                link.href = URL.createObjectURL(blob);
+                                                link.download = file.name;
+                                                link.click();
+                                            }
+                                        });
+                                        contentDiv.appendChild(exportButton);
                                     } else {
-                                        validFiles.push({name: file.name, content: json});
+                                        const successMessage = document.createElement('p');
+                                        successMessage.textContent = 'Chúc mừng! Không có bất kỳ lỗi nào';
+                                        successMessage.classList.add('success-message');
+                                        contentDiv.appendChild(successMessage);
                                     }
                                 } else {
-                                    invalidFiles.push({name: file.name, content: json, reason: result.reason});
+                                    const reason = document.createElement('p');
+                                    reason.textContent = 'Reason: ' + result.reason;
+                                    reason.classList.add('reason');
+                                    contentDiv.appendChild(reason);
                                 }
+
+                                fileDiv.appendChild(contentDiv);
+                                filesContainer.appendChild(fileDiv);
                                 resolve();
                             } catch (err) {
                                 console.error('Error parsing JSON in file ' + file.name);
-                                invalidFiles.push({name: file.name, content: null, reason: 'Error parsing JSON'});
+                                const fileDiv = document.createElement('div');
+                                fileDiv.classList.add('file-container');
+
+                                const title = document.createElement('h3');
+                                title.textContent = file.name;
+                                fileDiv.appendChild(title);
+
+                                const reason = document.createElement('p');
+                                reason.textContent = 'Reason: Error parsing JSON';
+                                reason.classList.add('reason');
+                                fileDiv.appendChild(reason);
+
+                                filesContainer.appendChild(fileDiv);
                                 resolve();
                             }
                         };
                         reader.onerror = function() {
                             console.error('Error reading file ' + file.name);
-                            invalidFiles.push({name: file.name, content: null, reason: 'Error reading file'});
+                            const fileDiv = document.createElement('div');
+                            fileDiv.classList.add('file-container');
+
+                            const title = document.createElement('h3');
+                            title.textContent = file.name;
+                            fileDiv.appendChild(title);
+
+                            const reason = document.createElement('p');
+                            reason.textContent = 'Reason: Error reading file';
+                            reason.classList.add('reason');
+                            fileDiv.appendChild(reason);
+
+                            filesContainer.appendChild(fileDiv);
                             resolve();
                         };
                         reader.readAsText(file);
@@ -108,9 +199,6 @@
 
             Promise.all(filePromises).then(() => {
                 // All files processed
-                // Display valid and invalid files
-                displayValidFiles(validFiles);
-                displayInvalidFiles(invalidFiles);
             });
         });
 
@@ -118,21 +206,17 @@
             const dots = data.dots;
             const edges = data.edges;
 
-            // Check condition 2 first: no two nodes have more than one edge between them
             const edgeSet = new Set();
             for (let edge of edges) {
                 const start = Math.min(edge.startIndex, edge.endIndex);
                 const end = Math.max(edge.startIndex, edge.endIndex);
                 const edgeKey = start + '-' + end;
                 if (edgeSet.has(edgeKey)) {
-                    // There is more than one edge between two nodes
                     return { valid: false, reason: '2 điểm không được có hơn 1 cạnh' };
                 }
                 edgeSet.add(edgeKey);
             }
 
-            // Check condition 1: For each node, check if there are two edges connected to it with length <50 and angle <90 degrees
-            // Build adjacency list
             const adjList = {};
             for (let i = 0; i < dots.length; i++) {
                 adjList[i] = [];
@@ -142,7 +226,6 @@
                 adjList[edge.endIndex].push(edge.startIndex);
             }
 
-            // For each node, check connected edges
             for (let i = 0; i < dots.length; i++) {
                 const connectedNodes = adjList[i];
                 if (connectedNodes.length < 2) continue;
@@ -161,7 +244,6 @@
                         const lengthAC = distance(dotA, dotC);
 
                         if (lengthAB < 50 || lengthAC < 50) {
-                            // Calculate angle between vectors AB and AC
                             const angle = calculateAngle(dotA, dotB, dotC);
                             if (angle < 80) {
                                 return { valid: false, reason: 'Hai cạnh kết nối với một điểm có độ dài nhỏ hơn 50 và góc giữa chúng nhỏ hơn 80 độ.' };
@@ -171,7 +253,6 @@
                 }
             }
 
-            // If all checks passed, the graph is valid
             return { valid: true };
         }
 
@@ -192,132 +273,12 @@
             return theta * (180 / Math.PI);
         }
 
-        function displayValidFiles(validFiles) {
-            const container = document.getElementById('validFilesContainer');
-            container.innerHTML = ''; // Clear previous content
-
-            if (validFiles.length === 0) {
-                container.style.display = 'none';
-                return;
-            }
-
-            container.style.display = 'block';
-
-            const title = document.createElement('h2');
-            title.textContent = 'Valid Files';
-            container.appendChild(title);
-
-            validFiles.forEach((fileData) => {
-                const fileDiv = document.createElement('div');
-                fileDiv.classList.add('file-container');
-
-                const title = document.createElement('h3');
-                title.textContent = fileData.name;
-                fileDiv.appendChild(title);
-
-                const canvas = document.createElement('canvas');
-                canvas.width = 400;
-                canvas.height = 400;
-                fileDiv.appendChild(canvas);
-
-                const ctx = canvas.getContext('2d');
-
-                // Draw the graph
-                drawGraph(ctx, fileData.content);
-
-                // Eulerian check
-                const eulerPath = findEulerianPath(fileData.content.dots, fileData.content.edges);
-
-                if (eulerPath === null) {
-                    const message = document.createElement('p');
-                    message.textContent = 'No Eulerian path found in this graph.';
-                    fileDiv.appendChild(message);
-                } else {
-                    // Success message
-                    const successMessage = document.createElement('p');
-                    successMessage.textContent = 'Chúc mừng! Không có bất kỳ lỗi nào';
-                    successMessage.classList.add('success-message');
-                    fileDiv.appendChild(successMessage);
-                }
-
-                container.appendChild(fileDiv);
-            });
-        }
-
-        function displayInvalidFiles(invalidFiles) {
-            const container = document.getElementById('invalidFilesContainer');
-            container.innerHTML = ''; // Clear previous content
-
-            if (invalidFiles.length === 0) {
-                container.style.display = 'none';
-                return;
-            }
-
-            container.style.display = 'block';
-
-            const title = document.createElement('h2');
-            title.textContent = 'Invalid Files';
-            container.appendChild(title);
-
-            invalidFiles.forEach((fileData) => {
-                const fileDiv = document.createElement('div');
-                fileDiv.classList.add('file-container');
-
-                const title = document.createElement('h3');
-                title.textContent = fileData.name;
-                fileDiv.appendChild(title);
-
-                const reason = document.createElement('p');
-                reason.textContent = 'Reason: ' + fileData.reason;
-                reason.classList.add('reason');
-                fileDiv.appendChild(reason);
-
-                if (fileData.content) {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 400;
-                    canvas.height = 400;
-                    fileDiv.appendChild(canvas);
-
-                    const ctx = canvas.getContext('2d');
-
-                    // Draw the graph
-                    drawGraph(ctx, fileData.content);
-                }
-
-                // Add export button if "guide" is missing
-                if (fileData.reason === 'Missing "guide" property') {
-                    const exportButton = document.createElement('button');
-                    exportButton.textContent = 'Export';
-                    exportButton.addEventListener('click', function() {
-                        const eulerPath = findEulerianPath(fileData.content.dots, fileData.content.edges);
-                        if (eulerPath === null) {
-                            alert('No Eulerian path found in this graph.');
-                        } else {
-                            // Add "guide" and export the updated JSON
-                            const newData = JSON.parse(JSON.stringify(fileData.content));
-                            newData.guide = eulerPath;
-                            const jsonString = JSON.stringify(newData, null, 2);
-                            const blob = new Blob([jsonString], { type: "application/json" });
-                            const link = document.createElement("a");
-                            link.href = URL.createObjectURL(blob);
-                            link.download = fileData.name;
-                            link.click();
-                        }
-                    });
-                    fileDiv.appendChild(exportButton);
-                }
-
-                container.appendChild(fileDiv);
-            });
-        }
-
         function drawGraph(ctx, data) {
             const dots = data.dots;
             const edges = data.edges;
 
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-            // Draw edges
             ctx.strokeStyle = '#0078d4';
             ctx.lineWidth = 2;
 
@@ -337,7 +298,6 @@
                 ctx.stroke();
             });
 
-            // Draw dots
             ctx.fillStyle = '#fff';
             ctx.strokeStyle = '#0078d4';
             ctx.lineWidth = 2;
@@ -348,7 +308,7 @@
                 ctx.fill();
                 ctx.stroke();
 
-                ctx.fillStyle = '#fff';
+                ctx.fillStyle = '#333';
                 ctx.font = '12px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
@@ -360,13 +320,11 @@
             const adj = {};
             const degree = {};
 
-            // Initialize adjacency list and degree count
             for (let i = 0; i < dots.length; i++) {
                 adj[i] = [];
                 degree[i] = 0;
             }
 
-            // Populate adjacency list and degree
             edges.forEach((edge, index) => {
                 adj[edge.startIndex].push({ node: edge.endIndex, edgeId: index });
                 adj[edge.endIndex].push({ node: edge.startIndex, edgeId: index });
@@ -374,7 +332,6 @@
                 degree[edge.endIndex]++;
             });
 
-            // Find nodes with odd degree
             const oddNodes = [];
             for (let i = 0; i < dots.length; i++) {
                 if (degree[i] % 2 !== 0) {
@@ -382,12 +339,10 @@
                 }
             }
 
-            // Check for Eulerian Path conditions
             if (oddNodes.length !== 0 && oddNodes.length !== 2) {
                 return null;
             }
 
-            // Start node
             let startNode = 0;
             if (oddNodes.length === 2) {
                 startNode = oddNodes[0];
@@ -410,7 +365,6 @@
                 }
             }
 
-            // Check if all edges are used
             if (usedEdges.size !== edges.length) {
                 return null;
             }
